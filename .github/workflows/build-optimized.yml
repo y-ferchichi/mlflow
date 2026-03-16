@@ -6,7 +6,7 @@ on:
     paths:
       - "mlflow/server/js/src/**"
       - "Dockerfile.optimized"
-      - ".github/workflows/build-melqart.yml"
+      - ".github/workflows/build-optimized.yml"
   workflow_dispatch:
     inputs:
       mlflow_version:

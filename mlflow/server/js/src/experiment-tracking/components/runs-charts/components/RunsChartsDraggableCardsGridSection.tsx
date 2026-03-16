@@ -401,7 +401,7 @@ export const RunsChartsDraggableCardsGridSection = memo(
       {hasMoreCards && (
         <div css={{ display: 'flex', justifyContent: 'center', padding: theme.spacing.md }}>
           <Button
-            componentId="melqart_show_more_charts"
+            componentId="codegen_mlflow_show_more_charts"
             onClick={() => setVisibleCount((prev) => prev + CHARTS_PER_PAGE)}
           >
             Show {Math.min(remainingCards, CHARTS_PER_PAGE)} more charts ({remainingCards} remaining)
