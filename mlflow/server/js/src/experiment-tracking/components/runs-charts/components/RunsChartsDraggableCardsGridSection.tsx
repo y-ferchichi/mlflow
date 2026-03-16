@@ -1,4 +1,4 @@
-import { Empty, useDesignSystemTheme } from '@databricks/design-system';
+import { Button, Empty, useDesignSystemTheme } from '@databricks/design-system';
 import { memo, useCallback, useMemo, useRef, useState } from 'react';
 import { useUpdateRunsChartsUIConfiguration } from '../hooks/useRunsChartsUIConfiguration';
 import { RunsChartsCardConfig } from '../runs-charts.types';
@@ -16,6 +16,13 @@ import { RunsChartsDraggablePreview } from './RunsChartsDraggablePreview';
 import { DRAGGABLE_CARD_TRANSITION_NAME, type RunsChartCardSetFullscreenFn } from './cards/ChartCard.common';
 import type { RunsGroupByConfig } from '../../experiment-page/utils/experimentPage.group-row-utils';
 import type { RunsChartsGlobalLineChartConfig } from '../../experiment-page/models/ExperimentPageUIState';
+
+/**
+ * Maximum number of chart cards to render per page within a section.
+ * When there are more charts than this limit, a "Show more" button is shown.
+ * This prevents DOM bloat when a run has thousands of metrics.
+ */
+const CHARTS_PER_PAGE = 50;
 
 const rowHeightSuggestions = [300, 330, 360, 400, 500];
 
@@ -156,7 +163,7 @@ export const RunsChartsDraggableCardsGridSection = memo(
       [columns, cardHeight, theme, cardsConfig.length],
     );
 
-    const cardsToRender = useMemo(() => {
+    const allFilteredCards = useMemo(() => {
       return cardsConfig.filter((cardConfig) => {
         if (!hideEmptyCharts) {
           return true;
@@ -164,6 +171,15 @@ export const RunsChartsDraggableCardsGridSection = memo(
         return !isEmptyChartCard(chartRunData, cardConfig);
       });
     }, [cardsConfig, chartRunData, hideEmptyCharts]);
+
+    // Pagination: only render a limited number of cards to prevent DOM bloat
+    // with thousands of metrics
+    const [visibleCount, setVisibleCount] = useState(CHARTS_PER_PAGE);
+    const cardsToRender = useMemo(() => {
+      return allFilteredCards.slice(0, visibleCount);
+    }, [allFilteredCards, visibleCount]);
+    const hasMoreCards = allFilteredCards.length > visibleCount;
+    const remainingCards = allFilteredCards.length - visibleCount;
 
     // Calculate the transforms for each card based on the dragged card and its position.
     const cardTransforms = useMemo(() => {
@@ -307,6 +323,7 @@ export const RunsChartsDraggableCardsGridSection = memo(
     );
 
     return (
+      <>
       <div
         ref={gridBoxRef}
         css={[
@@ -381,6 +398,17 @@ export const RunsChartsDraggableCardsGridSection = memo(
         {dragPreview && <RunsChartsDraggablePreview {...dragPreview} />}
         {resizePreview && <RunsChartsDraggablePreview {...resizePreview} />}
       </div>
+      {hasMoreCards && (
+        <div css={{ display: 'flex', justifyContent: 'center', padding: theme.spacing.md }}>
+          <Button
+            componentId="melqart_show_more_charts"
+            onClick={() => setVisibleCount((prev) => prev + CHARTS_PER_PAGE)}
+          >
+            Show {Math.min(remainingCards, CHARTS_PER_PAGE)} more charts ({remainingCards} remaining)
+          </Button>
+        </div>
+      )}
+    </>
     );
   },
 );

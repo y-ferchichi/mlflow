@@ -1,0 +1,29 @@
+ARG MLFLOW_VERSION=2.21.3
+
+# Stage 1: Build the optimized React UI from source
+FROM node:18-alpine AS ui-builder
+WORKDIR /app
+
+# Copy the full JS source and install dependencies
+COPY mlflow/server/js/package.json mlflow/server/js/yarn.lock ./
+RUN yarn install --frozen-lockfile
+
+COPY mlflow/server/js/ ./
+
+# Build the React app (includes our pagination + section collapse optimizations)
+ENV NODE_OPTIONS="--max_old_space_size=8192"
+RUN yarn build
+
+# Stage 2: Final MLflow image with optimized UI
+FROM ghcr.io/mlflow/mlflow:v${MLFLOW_VERSION}
+
+# Replace the default React UI build with our optimized version.
+#
+# Optimizations applied to the default MLflow UI:
+#   - Chart card pagination: renders max 50 cards at a time instead of all 3000+
+#   - Section auto-collapse: sections collapse by default when >100 metrics
+#   - Prevents DOM bloat and browser crashes with high-metric-count runs
+#
+# The MLflow server, REST API, database schema, and artifact storage
+# are completely unchanged.
+COPY --from=ui-builder /app/build/ /usr/local/lib/python3.10/site-packages/mlflow/server/js/build/

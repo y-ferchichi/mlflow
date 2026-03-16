@@ -244,11 +244,14 @@ export abstract class RunsChartsCardConfig {
       ...[MLFLOW_MODEL_METRIC_NAME, MLFLOW_SYSTEM_METRIC_NAME].filter((name) => enabledSectionNames.includes(name)),
     ];
 
-    // Create section configs
+    // Create section configs. When there are many metrics (>100 total charts),
+    // collapse all sections by default to prevent rendering thousands of chart
+    // components at once. Users can expand sections they're interested in.
+    const collapseByDefault = resultChartSet.length > 100;
     const resultSectionSet: ChartSectionConfig[] = sortedSectionNames.map((sectionName) => ({
       uuid: sectionName2Uuid[sectionName],
       name: sectionName,
-      display: true,
+      display: !collapseByDefault,
       isReordered: false,
       deleted: false,
       isGenerated: true,

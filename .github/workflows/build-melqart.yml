@@ -1,11 +1,11 @@
-name: Build Melqart MLflow Image
+name: Build Optimized MLflow Image
 
 on:
   push:
-    branches: [melqart/*]
+    branches: [fix/high-metric-count-ui-performance]
     paths:
-      - "melqart/**"
-      - "Dockerfile.melqart"
+      - "mlflow/server/js/src/**"
+      - "Dockerfile.optimized"
       - ".github/workflows/build-melqart.yml"
   workflow_dispatch:
     inputs:
@@ -16,7 +16,7 @@ on:
 
 env:
   REGISTRY: ghcr.io
-  IMAGE_NAME: ${{ github.repository }}-melqart
+  IMAGE_NAME: ${{ github.repository }}
 
 jobs:
   build-and-push:
@@ -43,14 +43,14 @@ jobs:
           images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
           tags: |
             type=raw,value=latest
-            type=raw,value=v${{ inputs.mlflow_version || '2.21.3' }}
+            type=raw,value=v${{ inputs.mlflow_version || '2.21.3' }}-optimized
             type=sha,prefix=
 
       - name: Build and push
         uses: docker/build-push-action@v6
         with:
           context: .
-          file: Dockerfile.melqart
+          file: Dockerfile.optimized
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
