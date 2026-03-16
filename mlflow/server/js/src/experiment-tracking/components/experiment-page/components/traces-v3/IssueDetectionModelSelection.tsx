@@ -1,19 +1,12 @@
 import React, { useState, useCallback, useEffect, useImperativeHandle, forwardRef } from 'react';
-import {
-  useDesignSystemTheme,
-  Typography,
-  Checkbox,
-  Tooltip,
-  Input,
-  Button,
-  Accordion,
-} from '@databricks/design-system';
+import { useDesignSystemTheme, Typography, Tooltip, Input, Button, Accordion } from '@databricks/design-system';
 import { FormattedMessage, useIntl } from '@databricks/i18n';
 import { ProviderSelect } from '../../../../../gateway/components/create-endpoint/ProviderSelect';
 import { IssueDetectionApiKeyConfigurator } from './IssueDetectionApiKeyConfigurator';
 import { IssueDetectionAdvancedSettings } from './IssueDetectionAdvancedSettings';
 import { useApiKeyConfiguration } from '../../../../../gateway/components/model-configuration/hooks/useApiKeyConfiguration';
 import type { ApiKeyConfiguration } from '../../../../../gateway/components/model-configuration/types';
+import { generateRandomName } from '../../../../../common/utils/NameUtils';
 
 const DEFAULT_PROVIDER = 'openai';
 
@@ -28,17 +21,17 @@ const DEFAULT_API_KEY_CONFIG: ApiKeyConfiguration = {
   },
 };
 
-// TODO: add default models for other providers
-const DEFAULT_MODELS_BY_PROVIDER: Record<string, { analysisModel: string; judgeModel: string }> = {
-  openai: { analysisModel: 'gpt-5', judgeModel: 'gpt-5-mini' },
-  anthropic: { analysisModel: 'claude-sonnet-4-20250514', judgeModel: 'claude-haiku-4-20250514' },
-  databricks: { analysisModel: 'databricks-gpt-5', judgeModel: 'databricks-gpt-5-mini' },
+// Default to recommended models for each provider
+const DEFAULT_MODEL_BY_PROVIDER: Record<string, string> = {
+  openai: 'gpt-5.4',
+  anthropic: 'claude-sonnet-4-6',
+  gemini: 'gemini-2.5-pro',
+  databricks: 'databricks-gpt-5-1',
 };
 
 export interface ModelSelectionValues {
   provider: string;
-  analysisModel: string;
-  judgeModel: string;
+  model: string;
   apiKeyConfig: ApiKeyConfiguration;
   saveKey: boolean;
 }
@@ -63,10 +56,15 @@ export const IssueDetectionModelSelection = forwardRef<
   const intl = useIntl();
 
   const [provider, setProvider] = useState(DEFAULT_PROVIDER);
-  const [analysisModel, setAnalysisModel] = useState(DEFAULT_MODELS_BY_PROVIDER[DEFAULT_PROVIDER].analysisModel);
-  const [judgeModel, setJudgeModel] = useState(DEFAULT_MODELS_BY_PROVIDER[DEFAULT_PROVIDER].judgeModel);
-  const [apiKeyConfig, setApiKeyConfig] = useState<ApiKeyConfiguration>(DEFAULT_API_KEY_CONFIG);
-  const [saveKey, setSaveKey] = useState(false);
+  const [model, setModel] = useState(DEFAULT_MODEL_BY_PROVIDER[DEFAULT_PROVIDER]);
+  const [apiKeyConfig, setApiKeyConfig] = useState<ApiKeyConfiguration>(() => ({
+    ...DEFAULT_API_KEY_CONFIG,
+    newSecret: {
+      ...DEFAULT_API_KEY_CONFIG.newSecret,
+      name: generateRandomName(DEFAULT_PROVIDER),
+    },
+  }));
+  const [saveKey] = useState(true);
   const [isAdvancedSettingsExpanded, setIsAdvancedSettingsExpanded] = useState(false);
 
   const { existingSecrets, authModes, defaultAuthMode, isLoadingProviderConfig } = useApiKeyConfiguration({
@@ -88,21 +86,29 @@ export const IssueDetectionModelSelection = forwardRef<
 
   const handleProviderChange = useCallback((newProvider: string) => {
     setProvider(newProvider);
-    const defaults = DEFAULT_MODELS_BY_PROVIDER[newProvider];
-    setAnalysisModel(defaults?.analysisModel ?? '');
-    setJudgeModel(defaults?.judgeModel ?? '');
-    setApiKeyConfig(DEFAULT_API_KEY_CONFIG);
-    setSaveKey(false);
-    // Auto-expand advanced settings if provider doesn't have defaults, collapse if it does
-    setIsAdvancedSettingsExpanded(!defaults);
+    const defaultModel = DEFAULT_MODEL_BY_PROVIDER[newProvider];
+    setModel(defaultModel ?? '');
+    setApiKeyConfig({
+      ...DEFAULT_API_KEY_CONFIG,
+      newSecret: {
+        ...DEFAULT_API_KEY_CONFIG.newSecret,
+        name: generateRandomName(newProvider),
+      },
+    });
+    // Auto-expand advanced settings if provider doesn't have a default model, collapse if it does
+    setIsAdvancedSettingsExpanded(!defaultModel);
   }, []);
 
   const reset = useCallback(() => {
     setProvider(DEFAULT_PROVIDER);
-    setAnalysisModel(DEFAULT_MODELS_BY_PROVIDER[DEFAULT_PROVIDER].analysisModel);
-    setJudgeModel(DEFAULT_MODELS_BY_PROVIDER[DEFAULT_PROVIDER].judgeModel);
-    setApiKeyConfig(DEFAULT_API_KEY_CONFIG);
-    setSaveKey(false);
+    setModel(DEFAULT_MODEL_BY_PROVIDER[DEFAULT_PROVIDER]);
+    setApiKeyConfig({
+      ...DEFAULT_API_KEY_CONFIG,
+      newSecret: {
+        ...DEFAULT_API_KEY_CONFIG.newSecret,
+        name: generateRandomName(DEFAULT_PROVIDER),
+      },
+    });
     setIsAdvancedSettingsExpanded(false);
   }, []);
 
@@ -112,7 +118,7 @@ export const IssueDetectionModelSelection = forwardRef<
       : Object.values(apiKeyConfig.newSecret.secretFields).some((v) => v) &&
         (!saveKey || !!apiKeyConfig.newSecret.name);
 
-  const isValid = Boolean(provider && analysisModel && judgeModel && isApiKeyValid && selectedTraceIds.length > 0);
+  const isValid = Boolean(provider && model && isApiKeyValid && selectedTraceIds.length > 0);
 
   useEffect(() => {
     onValidityChange(isValid);
@@ -123,15 +129,14 @@ export const IssueDetectionModelSelection = forwardRef<
     () => ({
       getValues: () => ({
         provider,
-        analysisModel,
-        judgeModel,
+        model,
         apiKeyConfig,
         saveKey,
       }),
       isValid,
       reset,
     }),
-    [provider, analysisModel, judgeModel, apiKeyConfig, saveKey, isValid, reset],
+    [provider, model, apiKeyConfig, saveKey, isValid, reset],
   );
 
   return (
@@ -140,13 +145,13 @@ export const IssueDetectionModelSelection = forwardRef<
         <div>
           <Typography.Title level={4} css={{ marginBottom: theme.spacing.xs }}>
             <FormattedMessage
-              defaultMessage="Select Models"
+              defaultMessage="Select Model"
               description="Header for the model selection step in issue detection modal"
             />
           </Typography.Title>
           <Typography.Text color="secondary">
             <FormattedMessage
-              defaultMessage="Configure the LLM provider and models to power issue detection"
+              defaultMessage="Configure the LLM provider and model to power issue detection"
               description="Description for the model selection step"
             />
           </Typography.Text>
@@ -158,29 +163,26 @@ export const IssueDetectionModelSelection = forwardRef<
             componentIdPrefix="mlflow.traces.issue-detection-modal.provider"
             hideLabel
           />
-          {provider && DEFAULT_MODELS_BY_PROVIDER[provider] && (
+          {provider && DEFAULT_MODEL_BY_PROVIDER[provider] && (
             <Typography.Text
               color="secondary"
               css={{ display: 'block', marginTop: theme.spacing.xs, fontSize: theme.typography.fontSizeSm }}
             >
               <FormattedMessage
-                defaultMessage="Analysis model: {analysisModel} · Judge model: {judgeModel}"
-                description="Display of default models for selected provider"
-                values={{
-                  analysisModel,
-                  judgeModel,
-                }}
+                defaultMessage="Model: {model}"
+                description="Display of default model for selected provider"
+                values={{ model }}
               />
             </Typography.Text>
           )}
-          {provider && !DEFAULT_MODELS_BY_PROVIDER[provider] && (
+          {provider && !DEFAULT_MODEL_BY_PROVIDER[provider] && (
             <Typography.Text
               color="secondary"
               css={{ display: 'block', marginTop: theme.spacing.xs, fontSize: theme.typography.fontSizeSm }}
             >
               <FormattedMessage
-                defaultMessage="Please select models in `Advanced settings` below"
-                description="Message when provider has no default models"
+                defaultMessage="Please select a model in `Advanced settings` below"
+                description="Message when provider has no default model"
               />
             </Typography.Text>
           )}
@@ -197,7 +199,7 @@ export const IssueDetectionModelSelection = forwardRef<
               hasExistingSecrets={existingSecrets.length > 0}
             />
             {apiKeyConfig.mode === 'new' && Object.values(apiKeyConfig.newSecret.secretFields).some((v) => v) && (
-              <div css={{ display: 'flex', alignItems: 'center', gap: theme.spacing.md }}>
+              <div css={{ display: 'flex', alignItems: 'center', gap: theme.spacing.sm, marginTop: -theme.spacing.xs }}>
                 <Tooltip
                   componentId="mlflow.traces.issue-detection-modal.save-key-tooltip"
                   content={intl.formatMessage({
@@ -206,35 +208,32 @@ export const IssueDetectionModelSelection = forwardRef<
                   })}
                 >
                   <span>
-                    <Checkbox
-                      componentId="mlflow.traces.issue-detection-modal.save-key-checkbox"
-                      isChecked={saveKey}
-                      onChange={(checked) => setSaveKey(checked)}
-                    >
+                    <Typography.Text color="secondary">
                       <FormattedMessage
-                        defaultMessage="Save this key for reuse"
-                        description="Checkbox to save API key for reuse"
+                        defaultMessage="This key will be saved for reuse."
+                        description="Text indicating API key will be saved for reuse"
                       />
-                    </Checkbox>
+                    </Typography.Text>
                   </span>
                 </Tooltip>
-                {saveKey && (
-                  <Input
-                    componentId="mlflow.traces.issue-detection-modal.api-key-name"
-                    value={apiKeyConfig.newSecret.name}
-                    onChange={(e) =>
-                      setApiKeyConfig({
-                        ...apiKeyConfig,
-                        newSecret: { ...apiKeyConfig.newSecret, name: e.target.value },
-                      })
-                    }
-                    placeholder={intl.formatMessage({
-                      defaultMessage: 'API key name',
-                      description: 'Placeholder for API key name input',
-                    })}
-                    css={{ width: 200 }}
-                  />
-                )}
+                <Typography.Text color="secondary">
+                  <FormattedMessage defaultMessage="API key name:" description="Label for API key name input" />
+                </Typography.Text>
+                <Input
+                  componentId="mlflow.traces.issue-detection-modal.api-key-name"
+                  value={apiKeyConfig.newSecret.name}
+                  onChange={(e) =>
+                    setApiKeyConfig({
+                      ...apiKeyConfig,
+                      newSecret: { ...apiKeyConfig.newSecret, name: e.target.value },
+                    })
+                  }
+                  placeholder={intl.formatMessage({
+                    defaultMessage: 'API key name',
+                    description: 'Placeholder for API key name input',
+                  })}
+                  css={{ width: 200 }}
+                />
               </div>
             )}
           </>
@@ -284,10 +283,8 @@ export const IssueDetectionModelSelection = forwardRef<
         >
           <IssueDetectionAdvancedSettings
             provider={provider}
-            analysisModel={analysisModel}
-            onAnalysisModelChange={setAnalysisModel}
-            judgeModel={judgeModel}
-            onJudgeModelChange={setJudgeModel}
+            model={model}
+            onModelChange={setModel}
             apiKeyConfig={apiKeyConfig}
             onApiKeyConfigChange={setApiKeyConfig}
             authModes={authModes}
